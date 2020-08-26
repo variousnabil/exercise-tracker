@@ -65,8 +65,17 @@ db.once("open", function () {
     });
 
     // get exercises
-    app.get('api/exercise/log', (req, res) => {
-
+    app.get('/api/exercise/log', (req, res) => {
+        User.findById(req.query.userId, (err, data) => {
+            if (err) return res.json({ err });
+            let exercises = data.exercises;
+            const from = req.query.from === undefined ? -100000000000000 : new Date(req.query.from).getTime();
+            const to = req.query.to === undefined ? new Date('4000-01-01').getTime() : new Date(req.query.to).getTime();
+            const limit = req.query.limit === undefined ? exercises.length : req.query.limit;
+            exercises = exercises.filter(exercise => exercise.date >= from && exercise.date <= to);
+            exercises = exercises.slice(0, limit);
+            res.json(exercises);
+        });
     });
 });
 
