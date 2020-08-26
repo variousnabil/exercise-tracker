@@ -12,6 +12,7 @@ var db = mongoose.connection;
 db.on("error", console.error.bind(console, "connection error:"));
 db.once("open", function () {
     app.listen(8000);
+    app.use(bodyParser.urlencoded({ extended: false }));
     app.use(bodyParser.json());
     const Schema = mongoose.Schema;
 
@@ -27,14 +28,24 @@ db.once("open", function () {
 
     // new user
     app.post('/api/exercise/new-user', (req, res) => {
-        const username = req.body.username;
+        const username = req.body.username === undefined ? 'defaultUsername' : req.body.username;
         User.create([{
             username,
             exercises: []
         }], (err, data) => {
             if (err) return res.json({ err });
-            res.json({ data });
+            res.json({ _id: data[0]._id, username: data[0].username });
         });
+    });
+
+    // get all user
+    app.get('/api/exercise/users', (req, res) => {
+        User.find()
+            .select('_id username')
+            .exec((err, data) => {
+                if (err) return res.json({ err });
+                res.json(data);
+            });
     });
 
     // new exercise
@@ -59,13 +70,21 @@ db.once("open", function () {
             const user = new User(data);
             user.save((err, data) => {
                 if (err) return res.json({ err });
-                res.json(data);
+                let resData = {
+                    _id: data._id,
+                    username: data.username,
+                    date: formatDate(newExercise.date),
+                    duration: newExercise.duration,
+                    description: newExercise.description
+                };
+                res.json(resData);
             });
         });
     });
 
     // get exercises
     app.get('/api/exercise/log', (req, res) => {
+        if (req.query.userId === undefined) return res.json({ err: 'userId query parameter is required' });
         User.findById(req.query.userId, (err, data) => {
             if (err) return res.json({ err });
             let exercises = data.exercises;
@@ -79,3 +98,18 @@ db.once("open", function () {
     });
 });
 
+function formatDate(date) {
+    const monthNames = ["January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ];
+    var d = new Date(date),
+        monthName = monthNames[d.getMonth()].substr(0, 3),
+        day = d.getDate().toString(),
+        year = d.getFullYear(),
+        dayName = d.toString().split(' ')[0];
+
+    if (day.length < 2)
+        day = '0' + day;
+
+    return `${dayName} ${monthName} ${day} ${year}`;
+}
