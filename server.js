@@ -6,6 +6,11 @@ const bodyParser = require('body-parser');
 require('dotenv').config();
 const MONGO_URI = process.env.MONGO_URI;
 
+app.use(express.static('public'))
+app.get('/', (req, res) => {
+    res.sendFile(__dirname + '/views/index.html')
+});
+
 mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
 
 var db = mongoose.connection;
@@ -25,6 +30,12 @@ db.once("open", function () {
         }]
     });
     const User = mongoose.model('User', userSchema);
+
+    // delete all user with no username
+    User.deleteMany({ username: undefined }, (err, data) => {
+        if (err) return console.log(err);
+        console.log('deleteMany success:', data.n, 'data deleted');
+    });
 
     // new user
     app.post('/api/exercise/new-user', (req, res) => {
@@ -50,19 +61,24 @@ db.once("open", function () {
 
     // new exercise
     app.post('/api/exercise/add', (req, res) => {
+        if (!Boolean(req.body.userId)
+            || !Boolean(req.body.description)
+            || !Boolean(req.body.duration)) {
+            return res.json({ err: 'userId, description, and duration is required' })
+        }
         User.findById(req.body.userId, (err, data) => {
             if (err) return console.log(err);
             let newExercise = {};
-            if (req.body.date === undefined) {
+            if (!(Boolean(req.body.date))) {
                 newExercise = {
                     description: req.body.description,
-                    duration: req.body.duration,
+                    duration: Number(req.body.duration),
                     date: new Date().getTime()
                 };
             } else {
                 newExercise = {
                     description: req.body.description,
-                    duration: req.body.duration,
+                    duration: Number(req.body.duration),
                     date: new Date(req.body.date).getTime()
                 };
             }
@@ -93,7 +109,22 @@ db.once("open", function () {
             const limit = req.query.limit === undefined ? exercises.length : req.query.limit;
             exercises = exercises.filter(exercise => exercise.date >= from && exercise.date <= to);
             exercises = exercises.slice(0, limit);
-            res.json(exercises);
+            const log = exercises.map(exercise => {
+                let modifiedExercise = {
+                    _id: exercise.id,
+                    date: formatDate(exercise.date),
+                    duration: exercise.duration,
+                    description: exercise.description
+                };
+                return modifiedExercise;
+            });
+            let resData = {
+                _id: data._id,
+                username: data.username,
+                count: exercises.length,
+                log
+            };
+            res.json(resData);
         });
     });
 });
